@@ -591,9 +591,7 @@ class FlairEmbeddings(TokenEmbeddings):
         if "chars_per_chunk" not in self.__dict__:
             self.chars_per_chunk = 512
 
-        if not self.fine_tune:
-            pass
-        else:
+        if self.fine_tune:
             super(FlairEmbeddings, self).train(mode)
 
     @property
@@ -729,27 +727,28 @@ class PooledFlairEmbeddings(TokenEmbeddings):
                 local_embedding = token._embeddings[self.context_embeddings.name].cpu()
 
                 # check token.text is empty or not
-                if token.text:
-                    if token.text[0].isupper() or not self.only_capitalized:
+                if token.text and (
+                    token.text[0].isupper() or not self.only_capitalized
+                ):
 
-                        if token.text not in self.word_embeddings:
-                            self.word_embeddings[token.text] = local_embedding
-                            self.word_count[token.text] = 1
-                        else:
+                    if token.text not in self.word_embeddings:
+                        self.word_embeddings[token.text] = local_embedding
+                        self.word_count[token.text] = 1
+                    else:
 
-                            # set aggregation operation
-                            if self.pooling == "mean":
-                                aggregated_embedding = torch.add(self.word_embeddings[token.text], local_embedding)
-                            elif self.pooling == "fade":
-                                aggregated_embedding = torch.add(self.word_embeddings[token.text], local_embedding)
-                                aggregated_embedding /= 2
-                            elif self.pooling == "max":
-                                aggregated_embedding = torch.max(self.word_embeddings[token.text], local_embedding)
-                            elif self.pooling == "min":
-                                aggregated_embedding = torch.min(self.word_embeddings[token.text], local_embedding)
+                        # set aggregation operation
+                        if self.pooling == "mean":
+                            aggregated_embedding = torch.add(self.word_embeddings[token.text], local_embedding)
+                        elif self.pooling == "fade":
+                            aggregated_embedding = torch.add(self.word_embeddings[token.text], local_embedding)
+                            aggregated_embedding /= 2
+                        elif self.pooling == "max":
+                            aggregated_embedding = torch.max(self.word_embeddings[token.text], local_embedding)
+                        elif self.pooling == "min":
+                            aggregated_embedding = torch.min(self.word_embeddings[token.text], local_embedding)
 
-                            self.word_embeddings[token.text] = aggregated_embedding
-                            self.word_count[token.text] += 1
+                        self.word_embeddings[token.text] = aggregated_embedding
+                        self.word_count[token.text] += 1
 
         # add embeddings after updating
         for sentence in sentences:
@@ -816,12 +815,12 @@ class TransformerWordEmbeddings(TokenEmbeddings):
 
         # load tokenizer and transformer model
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(model, **kwargs)
-        if not 'config' in kwargs:
-            config = AutoConfig.from_pretrained(model, output_hidden_states=True, **kwargs)
-            self.model = AutoModel.from_pretrained(model, config=config, **kwargs)
-        else:
+        if 'config' in kwargs:
             self.model = AutoModel.from_pretrained(None, **kwargs)
 
+        else:
+            config = AutoConfig.from_pretrained(model, output_hidden_states=True, **kwargs)
+            self.model = AutoModel.from_pretrained(model, config=config, **kwargs)
         self.allow_long_sentences = allow_long_sentences
 
         if allow_long_sentences:
@@ -869,10 +868,10 @@ class TransformerWordEmbeddings(TokenEmbeddings):
         self.static_embeddings = not self.fine_tune
 
         # calculate embedding length
-        if not self.layer_mean:
-            length = len(self.layer_indexes) * self.model.config.hidden_size
-        else:
+        if self.layer_mean:
             length = self.model.config.hidden_size
+        else:
+            length = len(self.layer_indexes) * self.model.config.hidden_size
         if self.pooling_operation == 'first_last': length *= 2
 
         # return length
@@ -894,7 +893,7 @@ class TransformerWordEmbeddings(TokenEmbeddings):
         tokens = tokenizer.encode(test_string)
 
         for begin_offset, token in enumerate(tokens):
-            if tokenizer.decode([token]) == test_string or tokenizer.decode([token]) == tokenizer.unk_token:
+            if tokenizer.decode([token]) in [test_string, tokenizer.unk_token]:
                 break
         return begin_offset
 
@@ -909,9 +908,7 @@ class TransformerWordEmbeddings(TokenEmbeddings):
 
     def _get_processed_token_text(self, token: Token) -> str:
         pieces = self.tokenizer.tokenize(token.text)
-        token_text = ''
-        for piece in pieces:
-            token_text += self._remove_special_markup(piece)
+        token_text = ''.join(self._remove_special_markup(piece) for piece in pieces)
         token_text = token_text.lower()
         return token_text
 
@@ -1056,7 +1053,7 @@ class TransformerWordEmbeddings(TokenEmbeddings):
                 if self.pooling_operation == "first":
                     final_embedding: torch.FloatTensor = current_embeddings[0]
 
-                if self.pooling_operation == "last":
+                elif self.pooling_operation == "last":
                     final_embedding: torch.FloatTensor = current_embeddings[-1]
 
                 if self.pooling_operation == "first_last":
@@ -1092,7 +1089,11 @@ class TransformerWordEmbeddings(TokenEmbeddings):
         original_sentence = sentence
 
         import random
-        expand_context = False if self.training and random.randint(1, 100) <= (self.context_dropout * 100) else True
+        expand_context = (
+            not self.training
+            or random.randint(1, 100) > self.context_dropout * 100
+        )
+
 
         left_context = ''
         right_context = ''
@@ -1167,7 +1168,7 @@ class TransformerWordEmbeddings(TokenEmbeddings):
             subtoken_count += 1
 
             # append subtoken to reconstruct token
-            reconstructed_token = reconstructed_token + subtoken
+            reconstructed_token += subtoken
 
             # check if reconstructed token is the same as current token
             if reconstructed_token.lower() == token_text:
@@ -1180,12 +1181,11 @@ class TransformerWordEmbeddings(TokenEmbeddings):
                 subtoken_count = 0
 
                 # break from loop if all tokens are accounted for
-                if len(token_subtoken_lengths) < len(sentence):
-                    token = next(word_iterator)
-                    token_text = self._get_processed_token_text(token)
-                else:
+                if len(token_subtoken_lengths) >= len(sentence):
                     break
 
+                token = next(word_iterator)
+                token_text = self._get_processed_token_text(token)
         # if tokens are unaccounted for
         while len(token_subtoken_lengths) < len(sentence) and len(token.text) == 1:
             token_subtoken_lengths.append(0)
@@ -1252,22 +1252,22 @@ class TransformerWordEmbeddings(TokenEmbeddings):
         # necessary for reverse compatibility with Flair <= 0.7
         if 'use_scalar_mix' in self.__dict__.keys():
             self.__dict__['layer_mean'] = d['use_scalar_mix']
-        if not 'memory_effective_training' in self.__dict__.keys():
+        if 'memory_effective_training' not in self.__dict__.keys():
             self.__dict__['memory_effective_training'] = True
         if 'pooling_operation' in self.__dict__.keys():
             self.__dict__['subtoken_pooling'] = d['pooling_operation']
-        if not 'context_length' in self.__dict__.keys():
+        if 'context_length' not in self.__dict__.keys():
             self.__dict__['context_length'] = 0
         if 'use_context' in self.__dict__.keys():
             self.__dict__['context_length'] = 64 if self.__dict__['use_context'] == True else 0
 
-        if not 'context_dropout' in self.__dict__.keys():
+        if 'context_dropout' not in self.__dict__.keys():
             self.__dict__['context_dropout'] = 0.5
-        if not 'respect_document_boundaries' in self.__dict__.keys():
+        if 'respect_document_boundaries' not in self.__dict__.keys():
             self.__dict__['respect_document_boundaries'] = True
-        if not 'memory_effective_training' in self.__dict__.keys():
+        if 'memory_effective_training' not in self.__dict__.keys():
             self.__dict__['memory_effective_training'] = True
-        if not 'base_model_name' in self.__dict__.keys():
+        if 'base_model_name' not in self.__dict__.keys():
             self.__dict__['base_model_name'] = self.__dict__['name'].split('transformer-word-')[-1]
 
         # special handling for deserializing transformer models
@@ -1278,7 +1278,7 @@ class TransformerWordEmbeddings(TokenEmbeddings):
             loaded_config = config_class.from_dict(d["config_state_dict"])
 
             # constructor arguments
-            layers = ','.join([str(idx) for idx in self.__dict__['layer_indexes']])
+            layers = ','.join(str(idx) for idx in self.__dict__['layer_indexes'])
 
             # re-initialize transformer word embeddings with constructor arguments
             embedding = TransformerWordEmbeddings(
@@ -1583,34 +1583,34 @@ class MuseCrosslingualEmbeddings(TokenEmbeddings):
 
     def _add_embeddings_internal(self, sentences: List[Sentence]) -> List[Sentence]:
 
+        supported = [
+            "en",
+            "de",
+            "bg",
+            "ca",
+            "hr",
+            "cs",
+            "da",
+            "nl",
+            "et",
+            "fi",
+            "fr",
+            "el",
+            "he",
+            "hu",
+            "id",
+            "it",
+            "mk",
+            "no",
+            "pl",
+            "pt",
+            "ro",
+            "ru",
+            "sk",
+        ]
         for i, sentence in enumerate(sentences):
 
             language_code = sentence.get_language_code()
-            supported = [
-                "en",
-                "de",
-                "bg",
-                "ca",
-                "hr",
-                "cs",
-                "da",
-                "nl",
-                "et",
-                "fi",
-                "fr",
-                "el",
-                "he",
-                "hu",
-                "id",
-                "it",
-                "mk",
-                "no",
-                "pl",
-                "pt",
-                "ro",
-                "ru",
-                "sk",
-            ]
             if language_code not in supported:
                 language_code = "en"
 
@@ -1791,8 +1791,6 @@ class ELMoEmbeddings(TokenEmbeddings):
                 'To use ELMoEmbeddings, please first install with "pip install allennlp==0.9.0"'
             )
             log.warning("-" * 100)
-            pass
-
         assert embedding_mode in ["all", "top", "average"]
 
         self.name = f"elmo-{model}-{embedding_mode}"
@@ -1803,16 +1801,16 @@ class ELMoEmbeddings(TokenEmbeddings):
             options_file = allennlp.commands.elmo.DEFAULT_OPTIONS_FILE
             weight_file = allennlp.commands.elmo.DEFAULT_WEIGHT_FILE
             # alternatively, a small, medium or portuguese model can be selected by passing the appropriate mode name
-            if model == "small":
-                options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_options.json"
-                weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
             if model == "medium":
                 options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x2048_256_2048cnn_1xhighway/elmo_2x2048_256_2048cnn_1xhighway_options.json"
                 weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x2048_256_2048cnn_1xhighway/elmo_2x2048_256_2048cnn_1xhighway_weights.hdf5"
+            elif model == "small":
+                options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_options.json"
+                weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5"
             if model in ["large", "5.5B"]:
                 options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_5.5B/elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json"
                 weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway_5.5B/elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5"
-            if model == "pt" or model == "portuguese":
+            if model in ["pt", "portuguese"]:
                 options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/contributed/pt/elmo_pt_options.json"
                 weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/contributed/pt/elmo_pt_weights.hdf5"
             if model == "pubmed":
@@ -1907,7 +1905,9 @@ class ELMoEmbeddings(TokenEmbeddings):
 
         self.ee.elmo_bilm.to(device=flair.device)
         self.ee.elmo_bilm._elmo_lstm._states = tuple(
-            [state.to(flair.device) for state in self.ee.elmo_bilm._elmo_lstm._states])
+            state.to(flair.device)
+            for state in self.ee.elmo_bilm._elmo_lstm._states
+        )
 
 
 class NILCEmbeddings(WordEmbeddings):

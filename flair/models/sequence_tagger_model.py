@@ -56,7 +56,7 @@ def log_sum_exp_batch(vecs):
 
 
 def pad_tensors(tensor_list):
-    ml = max([x.shape[0] for x in tensor_list])
+    ml = max(x.shape[0] for x in tensor_list)
     shape = [len(tensor_list), ml] + list(tensor_list[0].shape[1:])
     template = torch.zeros(*shape, dtype=torch.long, device=flair.device)
     lens_ = [x.shape[0] for x in tensor_list]
@@ -135,7 +135,7 @@ class SequenceTagger(flair.nn.Model):
             n_classes = len(self.tag_dictionary)
             weight_list = [1. for i in range(n_classes)]
             for i, tag in enumerate(self.tag_dictionary.get_items()):
-                if tag in loss_weights.keys():
+                if tag in loss_weights:
                     weight_list[i] = loss_weights[tag]
             self.loss_weights = torch.FloatTensor(weight_list).to(flair.device)
         else:
@@ -233,7 +233,7 @@ class SequenceTagger(flair.nn.Model):
         self.to(flair.device)
 
     def _get_state_dict(self):
-        model_state = {
+        return {
             "state_dict": self.state_dict(),
             "embeddings": self.embeddings,
             "hidden_size": self.hidden_size,
@@ -251,7 +251,6 @@ class SequenceTagger(flair.nn.Model):
             "weight_dict": self.weight_dict,
             "reproject_embeddings": self.reproject_embeddings,
         }
-        return model_state
 
     @staticmethod
     def _init_model_with_state_dict(state):
@@ -321,7 +320,7 @@ class SequenceTagger(flair.nn.Model):
         you wish to not only predict, but also keep the generated embeddings in CPU or GPU memory respectively.
         'gpu' to store embeddings in GPU memory.
         """
-        if label_name == None:
+        if label_name is None:
             label_name = self.tag_type
 
         with torch.no_grad():
@@ -353,11 +352,7 @@ class SequenceTagger(flair.nn.Model):
                 dataset=SentenceDataset(reordered_sentences), batch_size=mini_batch_size
             )
 
-            if self.use_crf:
-                transitions = self.transitions.detach().cpu().numpy()
-            else:
-                transitions = None
-
+            transitions = self.transitions.detach().cpu().numpy() if self.use_crf else None
             # progress bar for verbosity
             if verbose:
                 dataloader = tqdm(dataloader)
@@ -404,11 +399,7 @@ class SequenceTagger(flair.nn.Model):
                 return overall_loss / batch_no
 
     def _requires_span_F1_evaluation(self) -> bool:
-        span_F1 = False
-        for item in self.tag_dictionary.get_items():
-            if item.startswith('B-'):
-                span_F1 = True
-        return span_F1
+        return any(item.startswith('B-') for item in self.tag_dictionary.get_items())
 
     def _evaluate_with_span_F1(self, data_loader, embedding_storage_mode, mini_batch_size, out_path):
         eval_loss = 0
@@ -559,14 +550,10 @@ class SequenceTagger(flair.nn.Model):
                     y_true.append(labels.add_item(gold_tag))
 
                     # add predicted tag
-                    if wsd_evaluation:
-                        if gold_tag == 'O':
-                            predicted_tag = 'O'
-                        else:
-                            predicted_tag = token.get_tag('predicted').value
+                    if wsd_evaluation and gold_tag == 'O':
+                        predicted_tag = 'O'
                     else:
                         predicted_tag = token.get_tag('predicted').value
-
                     y_pred.append(labels.add_item(predicted_tag))
 
                     # for file output
@@ -592,7 +579,7 @@ class SequenceTagger(flair.nn.Model):
             label = labels.get_item_for_index(i)
             all_labels.append(label)
             all_indices.append(i)
-            if label == '_' or label == '': continue
+            if label in ['_', '']: continue
             target_names.append(label)
             labels_to_report.append(i)
 
@@ -652,7 +639,7 @@ class SequenceTagger(flair.nn.Model):
             device=flair.device,
         )
 
-        all_embs = list()
+        all_embs = []
         for sentence in sentences:
             all_embs += [
                 emb for token in sentence for emb in token.get_each_embedding(names)
@@ -713,9 +700,7 @@ class SequenceTagger(flair.nn.Model):
             if self.use_locked_dropout > 0.0:
                 sentence_tensor = self.locked_dropout(sentence_tensor)
 
-        features = self.linear(sentence_tensor)
-
-        return features
+        return self.linear(sentence_tensor)
 
     def _score_sentence(self, feats, tags, lens_):
 
@@ -979,9 +964,7 @@ class SequenceTagger(flair.nn.Model):
                                          self.tag_dictionary.get_idx_for_item(STOP_TAG)
                                      ][None, :].repeat(forward_var.shape[0], 1)
 
-        alpha = log_sum_exp_batch(terminal_var)
-
-        return alpha
+        return log_sum_exp_batch(terminal_var)
 
     @staticmethod
     def _filter_empty_sentences(sentences: List[Sentence]) -> List[Sentence]:
@@ -1268,14 +1251,16 @@ class MultiTagger:
         :param verbose: set to True to display a progress bar
         :param return_loss: set to True to return loss
         """
-        if any(["hunflair" in name for name in self.name_to_tagger.keys()]):
-            if "spacy" not in sys.modules:
-                warn(
-                    "We recommend to use SciSpaCy for tokenization and sentence splitting "
-                    "if HunFlair is applied to biomedical text, e.g.\n\n"
-                    "from flair.tokenization import SciSpacySentenceSplitter\n"
-                    "sentence = Sentence('Your biomed text', use_tokenizer=SciSpacySentenceSplitter())\n"
-                )
+        if (
+            any("hunflair" in name for name in self.name_to_tagger.keys())
+            and "spacy" not in sys.modules
+        ):
+            warn(
+                "We recommend to use SciSpaCy for tokenization and sentence splitting "
+                "if HunFlair is applied to biomedical text, e.g.\n\n"
+                "from flair.tokenization import SciSpacySentenceSplitter\n"
+                "sentence = Sentence('Your biomed text', use_tokenizer=SciSpacySentenceSplitter())\n"
+            )
 
         if isinstance(sentences, Sentence):
             sentences = [sentences]
@@ -1304,7 +1289,7 @@ class MultiTagger:
                 "hunflair-paper-gene",
                 "hunflair-paper-species",
             ]
-        elif model_names == "hunflair" or model_names == "bioner":
+        elif model_names in ["hunflair", "bioner"]:
             model_names = [
                 "hunflair-cellline",
                 "hunflair-chemical",

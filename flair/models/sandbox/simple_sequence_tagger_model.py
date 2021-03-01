@@ -144,7 +144,7 @@ class SimpleSequenceTagger(flair.nn.Model):
             label = labels.get_item_for_index(i)
             all_labels.append(label)
             all_indices.append(i)
-            if label == '_' or label == '': continue
+            if label in ['_', '']: continue
             target_names.append(label)
             labels_to_report.append(i)
 
@@ -184,14 +184,13 @@ class SimpleSequenceTagger(flair.nn.Model):
         return result, eval_loss
 
     def _get_state_dict(self):
-        model_state = {
+        return {
             "state_dict": self.state_dict(),
             "embeddings": self.embeddings,
             "tag_dictionary": self.tag_dictionary,
             "tag_type": self.tag_type,
             "beta": self.beta,
         }
-        return model_state
 
     @staticmethod
     def _init_model_with_state_dict(state):
@@ -310,7 +309,7 @@ class SimpleSequenceTagger(flair.nn.Model):
             device=flair.device,
         )
 
-        all_embs = list()
+        all_embs = []
         for sentence in sentences:
             all_embs += [
                 emb for token in sentence for emb in token.get_each_embedding(names)
@@ -331,9 +330,7 @@ class SimpleSequenceTagger(flair.nn.Model):
             ]
         )
 
-        features = self.linear(sentence_tensor)
-
-        return features
+        return self.linear(sentence_tensor)
 
     def _calculate_loss(
             self, features: torch.tensor, sentences: List[Sentence]
@@ -429,11 +426,7 @@ class SimpleSequenceTagger(flair.nn.Model):
                f'  (beta): {self.beta}\n)'
 
     def _requires_span_F1_evaluation(self) -> bool:
-        span_F1 = False
-        for item in self.tag_dictionary.get_items():
-            if item.startswith('B-'):
-                span_F1 = True
-        return span_F1
+        return any(item.startswith('B-') for item in self.tag_dictionary.get_items())
 
     def _evaluate_with_span_F1(self, data_loader, embedding_storage_mode, mini_batch_size, out_path):
         eval_loss = 0

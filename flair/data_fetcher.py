@@ -164,11 +164,11 @@ class NLPTaskDataFetcher:
             )
 
         # many NER tasks follow the CoNLL 03 format with four colulms: text, pos, np and ner tag
-        if (
-            task == NLPTask.CONLL_03.value
-            or task == NLPTask.ONTONER.value
-            or task == NLPTask.FASHION.value
-        ):
+        if task in [
+            NLPTask.CONLL_03.value,
+            NLPTask.ONTONER.value,
+            NLPTask.FASHION.value,
+        ]:
             columns = {0: "text", 1: "pos", 2: "np", 3: "ner"}
 
             return NLPTaskDataFetcher.load_column_corpus(
@@ -192,7 +192,7 @@ class NLPTaskDataFetcher:
             )
 
         # the CoNLL 03 task for Spanish only has two columns
-        if task == NLPTask.CONLL_03_SPANISH.value or task == NLPTask.WNUT_17.value:
+        if task in [NLPTask.CONLL_03_SPANISH.value, NLPTask.WNUT_17.value]:
             columns = {0: "text", 1: "ner"}
 
             return NLPTaskDataFetcher.load_column_corpus(
@@ -292,7 +292,7 @@ class NLPTaskDataFetcher:
                 file_name = file.name
                 if file_name.endswith(".gz"):
                     continue
-                if "train" in file_name and not "54019" in file_name:
+                if "train" in file_name and "54019" not in file_name:
                     train_file = file
                 if "dev" in file_name:
                     dev_file = file
@@ -492,10 +492,10 @@ class NLPTaskDataFetcher:
         :param tokenizer: Custom tokenizer to use to prepare the data set (default SegtokTokenizer)
         :return: list of sentences
         """
-        label_prefix = "__label__"
         sentences = []
 
         with open(str(path_to_file), encoding="utf-8") as f:
+            label_prefix = "__label__"
             for line in f:
                 words = line.split()
 
@@ -556,8 +556,8 @@ class NLPTaskDataFetcher:
 
         # most data sets have the token text in the first column, if not, pass 'text' as column
         text_column: int = 0
-        for column in column_name_map:
-            if column_name_map[column] == "text":
+        for column, value_ in column_name_map.items():
+            if value_ == "text":
                 text_column = column
 
         sentence: Sentence = Sentence()
@@ -575,10 +575,9 @@ class NLPTaskDataFetcher:
             else:
                 fields: List[str] = re.split(r"\s+", line)
                 token = Token(fields[text_column])
-                for column in column_name_map:
-                    if len(fields) > column:
-                        if column != text_column:
-                            token.add_tag(column_name_map[column], fields[column])
+                for column, value in column_name_map.items():
+                    if len(fields) > column and column != text_column:
+                        token.add_tag(value, fields[column])
 
                 sentence.add_token(token)
 
@@ -625,7 +624,7 @@ class NLPTaskDataFetcher:
                 token.add_tag("dependency", str(fields[7]))
 
                 for morph in str(fields[5]).split("|"):
-                    if not "=" in morph:
+                    if "=" not in morph:
                         continue
                     token.add_tag(morph.split("=")[0].lower(), morph.split("=")[1])
 
@@ -644,17 +643,16 @@ class NLPTaskDataFetcher:
         import random
 
         sample_size: int = round(total_number_of_sentences * percentage)
-        sample = random.sample(range(1, total_number_of_sentences), sample_size)
-        return sample
+        return random.sample(range(1, total_number_of_sentences), sample_size)
 
     @staticmethod
     def download_dataset(task: NLPTask):
 
         # conll 2000 chunking task
         if task == NLPTask.CONLL_2000:
-            conll_2000_path = "https://www.clips.uantwerpen.be/conll2000/chunking/"
             data_file = Path(flair.cache_root) / "datasets" / task.value / "train.txt"
             if not data_file.is_file():
+                conll_2000_path = "https://www.clips.uantwerpen.be/conll2000/chunking/"
                 cached_path(
                     f"{conll_2000_path}train.txt.gz", Path("datasets") / task.value
                 )
@@ -683,10 +681,10 @@ class NLPTaskDataFetcher:
                         shutil.copyfileobj(f_in, f_out)
 
         if task == NLPTask.NER_BASQUE:
-            ner_basque_path = "http://ixa2.si.ehu.eus/eiec/"
             data_path = Path(flair.cache_root) / "datasets" / task.value
             data_file = data_path / "named_ent_eu.train"
             if not data_file.is_file():
+                ner_basque_path = "http://ixa2.si.ehu.eus/eiec/"
                 cached_path(
                     f"{ner_basque_path}/eiec_v1.0.tgz", Path("datasets") / task.value
                 )
@@ -705,12 +703,12 @@ class NLPTaskDataFetcher:
                         shutil.move(f"{data_path}/{corpus_file}", data_path)
 
         if task == NLPTask.IMDB:
-            imdb_acl_path = (
-                "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
-            )
             data_path = Path(flair.cache_root) / "datasets" / task.value
             data_file = data_path / "train.txt"
             if not data_file.is_file():
+                imdb_acl_path = (
+                    "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
+                )
                 cached_path(imdb_acl_path, Path("datasets") / task.value)
                 import tarfile
 
@@ -801,10 +799,6 @@ class NLPTaskDataFetcher:
                 f"{wnut_path}emerging.test.annotated", Path("datasets") / task.value
             )
 
-        # Wikiner NER task
-        wikiner_path = (
-            "https://raw.githubusercontent.com/dice-group/FOX/master/input/Wikiner/"
-        )
         if task.value.startswith("wikiner"):
             lc = ""
             if task == NLPTask.WIKINER_ENGLISH:
@@ -834,6 +828,10 @@ class NLPTaskDataFetcher:
             )
             if not data_file.is_file():
 
+                # Wikiner NER task
+                wikiner_path = (
+                    "https://raw.githubusercontent.com/dice-group/FOX/master/input/Wikiner/"
+                )
                 cached_path(
                     f"{wikiner_path}aij-wikiner-{lc}-wp3.bz2",
                     Path("datasets") / task.value,
@@ -1368,12 +1366,12 @@ class NLPTaskDataFetcher:
             )
             data_path = Path(flair.cache_root) / "datasets" / task.value
 
-            train_filenames = ["de_hdt-ud-train-a.conllu", "de_hdt-ud-train-b.conllu"]
-
             new_train_file: Path = data_path / "de_hdt-ud-train-all.conllu"
 
             if not new_train_file.is_file():
                 with open(new_train_file, "wt") as f_out:
+                    train_filenames = ["de_hdt-ud-train-a.conllu", "de_hdt-ud-train-b.conllu"]
+
                     for train_filename in train_filenames:
                         with open(
                             data_path / "original" / train_filename, "rt"

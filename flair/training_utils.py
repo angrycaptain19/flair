@@ -50,22 +50,22 @@ class Metric(object):
 
     def get_tp(self, class_name=None):
         if class_name is None:
-            return sum([self._tps[class_name] for class_name in self.get_classes()])
+            return sum(self._tps[class_name] for class_name in self.get_classes())
         return self._tps[class_name]
 
     def get_tn(self, class_name=None):
         if class_name is None:
-            return sum([self._tns[class_name] for class_name in self.get_classes()])
+            return sum(self._tns[class_name] for class_name in self.get_classes())
         return self._tns[class_name]
 
     def get_fp(self, class_name=None):
         if class_name is None:
-            return sum([self._fps[class_name] for class_name in self.get_classes()])
+            return sum(self._fps[class_name] for class_name in self.get_classes())
         return self._fps[class_name]
 
     def get_fn(self, class_name=None):
         if class_name is None:
-            return sum([self._fns[class_name] for class_name in self.get_classes()])
+            return sum(self._fns[class_name] for class_name in self.get_classes())
         return self._fns[class_name]
 
     def precision(self, class_name=None):
@@ -114,10 +114,9 @@ class Metric(object):
 
     def macro_avg_f_score(self):
         class_f_scores = [self.f_score(class_name) for class_name in self.get_classes()]
-        if len(class_f_scores) == 0:
+        if not class_f_scores:
             return 0.0
-        macro_f_score = sum(class_f_scores) / len(class_f_scores)
-        return macro_f_score
+        return sum(class_f_scores) / len(class_f_scores)
 
     def micro_avg_accuracy(self):
         return self.accuracy(None)
@@ -127,7 +126,7 @@ class Metric(object):
             self.accuracy(class_name) for class_name in self.get_classes()
         ]
 
-        if len(class_accuracy) > 0:
+        if class_accuracy:
             return sum(class_accuracy) / len(class_accuracy)
 
         return 0.0
@@ -233,13 +232,12 @@ class MetricRegression(object):
         return "\t_\t_\t_\t_"
 
     def __str__(self):
-        line = "mean squared error: {0:.4f} - mean absolute error: {1:.4f} - pearson: {2:.4f} - spearman: {3:.4f}".format(
+        return "mean squared error: {0:.4f} - mean absolute error: {1:.4f} - pearson: {2:.4f} - spearman: {3:.4f}".format(
             self.mean_squared_error(),
             self.mean_absolute_error(),
             self.pearsonr(),
             self.spearmanr(),
         )
-        return line
 
 
 class EvaluationMetric(Enum):
@@ -291,7 +289,7 @@ class WeightExtractor(object):
             vec = state_dict[key]
             cur_indices = []
 
-            for x in range(len(vec.size())):
+            for _ in range(len(vec.size())):
                 index = random.randint(0, len(vec) - 1)
                 vec = vec[index]
                 cur_indices.append(index)
@@ -362,7 +360,7 @@ class AnnealOnPlateau(object):
                 type(optimizer).__name__))
         self.optimizer = optimizer
 
-        if isinstance(min_lr, list) or isinstance(min_lr, tuple):
+        if isinstance(min_lr, (list, tuple)):
             if len(min_lr) != len(optimizer.param_groups):
                 raise ValueError("expected {} min_lrs, got {}".format(
                     len(optimizer.param_groups), len(min_lr)))
@@ -400,23 +398,23 @@ class AnnealOnPlateau(object):
 
         is_better = False
 
-        if self.mode == 'min':
-            if current < self.best:
-                is_better = True
-
-        if self.mode == 'max':
-            if current > self.best:
-                is_better = True
+        if (
+            self.mode == 'max'
+            and current > self.best
+            or self.mode == 'min'
+            and current < self.best
+        ):
+            is_better = True
 
         if current == self.best and auxiliary_metric:
             current_aux = float(auxiliary_metric)
-            if self.aux_mode == 'min':
-                if current_aux < self.best_aux:
-                    is_better = True
-
-            if self.aux_mode == 'max':
-                if current_aux > self.best_aux:
-                    is_better = True
+            if (
+                self.aux_mode == 'max'
+                and current_aux > self.best_aux
+                or self.aux_mode == 'min'
+                and current_aux < self.best_aux
+            ):
+                is_better = True
 
         if is_better:
             self.best = current
@@ -538,7 +536,7 @@ def store_embeddings(sentences: List[Sentence], storage_mode: str):
 
     # memory management - option 1: send everything to CPU (pin to memory if we train on GPU)
     if storage_mode == "cpu":
-        pin_memory = False if str(flair.device) == "cpu" else True
+        pin_memory = str(flair.device) != "cpu"
         for sentence in sentences:
             sentence.to("cpu", pin_memory=pin_memory)
 

@@ -143,8 +143,6 @@ class ModelTrainer:
                 )
                 log_line(log)
                 self.use_tensorboard = False
-                pass
-
         if use_amp:
             if sys.version_info < (3, 0):
                 raise RuntimeError("Apex currently only supports Python 3. Aborting.")
@@ -234,7 +232,7 @@ class ModelTrainer:
 
         # minimize training loss if training with dev data, else maximize dev score
         anneal_mode = "min" if train_with_dev else "max"
-        
+
         if scheduler == OneCycleLR:
             dataset_size = len(self.corpus.train)
             if train_with_dev:
@@ -254,7 +252,7 @@ class ModelTrainer:
                 mode=anneal_mode,
                 verbose=True,
             )
-        
+
         if (isinstance(lr_scheduler, OneCycleLR) and batch_growth_annealing):
             raise ValueError("Batch growth with OneCycle policy is not implemented.")
 
@@ -390,7 +388,7 @@ class ModelTrainer:
                     # do the optimizer step
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
                     optimizer.step()
-                    
+
                     # do the scheduler step if one-cycle
                     if isinstance(lr_scheduler, OneCycleLR):
                         lr_scheduler.step()
@@ -598,7 +596,7 @@ class ModelTrainer:
                         self.model.load_state_dict(last_epoch_model_state_dict)
                         self.model.save(base_path / "pre-best-model.pt")
                         self.model.load_state_dict(current_state_dict)
-                        
+
                 if save_model_at_each_epoch:
                     print("saving model of current epoch")
                     model_name = "model_epoch_" + str(self.epoch) + ".pt"

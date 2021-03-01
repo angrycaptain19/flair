@@ -78,7 +78,7 @@ class ParamSelector(object):
         log.info(f"Evaluating parameter combination:")
         for k, v in params.items():
             if isinstance(v, Tuple):
-                v = ",".join([str(x) for x in v])
+                v = ",".join(str(x) for x in v)
             log.info(f"\t{k}: {str(v)}")
         log_line(log)
 
@@ -88,7 +88,7 @@ class ParamSelector(object):
         scores = []
         vars = []
 
-        for i in range(0, self.training_runs):
+        for i in range(self.training_runs):
             log_line(log)
             log.info(f"Training run: {i + 1}")
 
@@ -145,7 +145,7 @@ class ParamSelector(object):
             f.write(f"evaluation run {self.run}\n")
             for k, v in params.items():
                 if isinstance(v, Tuple):
-                    v = ",".join([str(x) for x in v])
+                    v = ",".join(str(x) for x in v)
                 f.write(f"\t{k}: {str(v)}\n")
             f.write(f"{self.optimization_value.value}: {final_score}\n")
             f.write(f"variance: {final_var}\n")
@@ -173,7 +173,7 @@ class ParamSelector(object):
             f.write("best parameter combination\n")
             for k, v in best.items():
                 if isinstance(v, Tuple):
-                    v = ",".join([str(x) for x in v])
+                    v = ",".join(str(x) for x in v)
                 f.write(f"\t{k}: {str(v)}\n")
 
 

@@ -51,9 +51,9 @@ def test_metric_with_classes():
     metric.add_tn("class-2")
     metric.add_fp("class-2")
 
-    for i in range(0, 10):
+    for _ in range(10):
         metric.add_tp("class-3")
-    for i in range(0, 90):
+    for _ in range(90):
         metric.add_fp("class-3")
 
     metric.add_tp("class-4")

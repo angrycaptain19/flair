@@ -209,7 +209,7 @@ class ColumnDataset(FlairDataset):
                 lines.append(line)
 
             # if sentence ends, break
-            if len(lines) > 0 and self.__line_completes_sentence(line):
+            if lines and self.__line_completes_sentence(line):
                 break
 
             line = file.readline()
@@ -275,8 +275,7 @@ class ColumnDataset(FlairDataset):
         return token
 
     def __line_completes_sentence(self, line: str) -> bool:
-        sentence_completed = line.isspace() or line == ''
-        return sentence_completed
+        return line.isspace() or line == ''
 
     def is_in_memory(self) -> bool:
         return self.in_memory
@@ -730,7 +729,7 @@ ner_column : int, optional
 """
 
     def add_I_prefix(current_line: List[str], ner: int, tag: str):
-        for i in range(0, len(current_line)):
+        for i in range(len(current_line)):
             if i == 0:
                 f.write(line_list[i])
             elif i == ner:
@@ -893,10 +892,10 @@ class CONLL_2000(ColumnCorpus):
             base_path = Path(flair.cache_root) / "datasets"
         data_folder = base_path / dataset_name
 
-        # download data if necessary
-        conll_2000_path = "https://www.clips.uantwerpen.be/conll2000/chunking/"
         data_file = Path(flair.cache_root) / "datasets" / dataset_name / "train.txt"
         if not data_file.is_file():
+            # download data if necessary
+            conll_2000_path = "https://www.clips.uantwerpen.be/conll2000/chunking/"
             cached_path(
                 f"{conll_2000_path}train.txt.gz", Path("datasets") / dataset_name
             )
@@ -1111,7 +1110,7 @@ class INSPEC(ColumnCorpus):
         inspec_path = "https://raw.githubusercontent.com/midas-research/keyphrase-extraction-as-sequence-labeling-data/master/Inspec"
         cached_path(f"{inspec_path}/train.txt", Path("datasets") / dataset_name)
         cached_path(f"{inspec_path}/test.txt", Path("datasets") / dataset_name)
-        if not "dev.txt" in os.listdir(data_folder):
+        if "dev.txt" not in os.listdir(data_folder):
             cached_path(f"{inspec_path}/valid.txt", Path("datasets") / dataset_name)
             # rename according to train - test - dev - convention
             os.rename(data_folder / "valid.txt", data_folder / "dev.txt")
@@ -1331,11 +1330,11 @@ class NER_BASQUE(ColumnCorpus):
             base_path = Path(flair.cache_root) / "datasets"
         data_folder = base_path / dataset_name
 
-        # download data if necessary
-        ner_basque_path = "http://ixa2.si.ehu.eus/eiec/"
         data_path = Path(flair.cache_root) / "datasets" / dataset_name
         data_file = data_path / "named_ent_eu.train"
         if not data_file.is_file():
+            # download data if necessary
+            ner_basque_path = "http://ixa2.si.ehu.eus/eiec/"
             cached_path(
                 f"{ner_basque_path}/eiec_v1.0.tgz", Path("datasets") / dataset_name
             )
@@ -1847,31 +1846,29 @@ def determine_conll_file(file: str, data_folder: str, cut_multisense: bool = Tru
 
     # check if converted file exists
 
-    if file is not None and not '.conll' in file:
+    if file is None or '.conll' in file:
 
-        if cut_multisense is True:
+        return file
 
-            conll_file = file[:-4] + '_cut.conll'
+    if cut_multisense:
 
-        else:
-
-            conll_file = file[:-3] + 'conll'
-
-        path_to_conll_file = data_folder / conll_file
-
-        if not path_to_conll_file.exists():
-            # convert the file to CoNLL
-
-            from_ufsac_to_conll(xml_file=Path(data_folder / file),
-                                conll_file=Path(data_folder / conll_file),
-                                encoding="latin-1",
-                                cut_multisense=cut_multisense)
-
-        return conll_file
+        conll_file = file[:-4] + '_cut.conll'
 
     else:
 
-        return file
+        conll_file = file[:-3] + 'conll'
+
+    path_to_conll_file = data_folder / conll_file
+
+    if not path_to_conll_file.exists():
+        # convert the file to CoNLL
+
+        from_ufsac_to_conll(xml_file=Path(data_folder / file),
+                            conll_file=Path(data_folder / conll_file),
+                            encoding="latin-1",
+                            cut_multisense=cut_multisense)
+
+    return conll_file
 
 
 class WSD_UFSAC(ColumnCorpus):
@@ -1956,10 +1953,6 @@ class WSD_UFSAC(ColumnCorpus):
 
 
 def _download_wikiner(language_code: str, dataset_name: str):
-    # download data if necessary
-    wikiner_path = (
-        "https://raw.githubusercontent.com/dice-group/FOX/master/input/Wikiner/"
-    )
     lc = language_code
 
     data_file = (
@@ -1969,6 +1962,10 @@ def _download_wikiner(language_code: str, dataset_name: str):
             / f"aij-wikiner-{lc}-wp3.train"
     )
     if not data_file.is_file():
+        # download data if necessary
+        wikiner_path = (
+            "https://raw.githubusercontent.com/dice-group/FOX/master/input/Wikiner/"
+        )
         cached_path(
             f"{wikiner_path}aij-wikiner-{lc}-wp3.bz2", Path("datasets") / dataset_name
         )
@@ -2496,7 +2493,7 @@ class WIKIANN(MultiCorpus):
 
             # if language not downloaded yet, download it
             if not language_folder.exists():
-                if first == True:
+                if first:
                     import gdown
                     import tarfile
                     first = False
@@ -2543,19 +2540,18 @@ class WIKIANN(MultiCorpus):
 
 def silver_standard_to_simple_ner_annotation(data_file: Union[str, Path]):
     f_read = open(data_file, 'r', encoding='utf-8')
-    f_write = open(data_file + '_new', 'w+', encoding='utf-8')
-    while True:
-        line = f_read.readline()
-        if line:
-            if line == '\n':
-                f_write.write(line)
+    with open(data_file + '_new', 'w+', encoding='utf-8') as f_write:
+        while True:
+            line = f_read.readline()
+            if line:
+                if line == '\n':
+                    f_write.write(line)
+                else:
+                    liste = line.split()
+                    f_write.write(liste[0] + ' ' + liste[-1] + '\n')
             else:
-                liste = line.split()
-                f_write.write(liste[0] + ' ' + liste[-1] + '\n')
-        else:
-            break
-    f_read.close()
-    f_write.close()
+                break
+        f_read.close()
 
 
 def google_drive_id_from_language_name(language):
@@ -3284,10 +3280,6 @@ class WNUT_2020_NER(ColumnCorpus):
 
 
 def _download_wikiner(language_code: str, dataset_name: str):
-    # download data if necessary
-    wikiner_path = (
-        "https://raw.githubusercontent.com/dice-group/FOX/master/input/Wikiner/"
-    )
     lc = language_code
 
     data_file = (
@@ -3298,6 +3290,10 @@ def _download_wikiner(language_code: str, dataset_name: str):
     )
     if not data_file.is_file():
 
+        # download data if necessary
+        wikiner_path = (
+            "https://raw.githubusercontent.com/dice-group/FOX/master/input/Wikiner/"
+        )
         cached_path(
             f"{wikiner_path}aij-wikiner-{lc}-wp3.bz2", Path("datasets") / dataset_name
         )

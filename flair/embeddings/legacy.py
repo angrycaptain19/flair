@@ -289,11 +289,7 @@ class CharLMEmbeddings(TokenEmbeddings):
 
                 offset_forward += len(token.text)
 
-                if self.is_forward_lm:
-                    offset = offset_forward
-                else:
-                    offset = offset_backward
-
+                offset = offset_forward if self.is_forward_lm else offset_backward
                 embedding = all_hidden_states_in_lm[offset, i, :]
 
                 # if self.tokenized_lm or token.whitespace_after:
@@ -1087,8 +1083,6 @@ class BertEmbeddings(TokenEmbeddings):
                     "ATTENTION! To use DistilBert, please first install a recent version of transformers!"
                 )
                 log.warning("-" * 100)
-                pass
-
             self.tokenizer = DistilBertTokenizer.from_pretrained(bert_model_or_path)
             self.model = DistilBertModel.from_pretrained(
                 pretrained_model_name_or_path=bert_model_or_path,
@@ -1135,7 +1129,7 @@ class BertEmbeddings(TokenEmbeddings):
         self, sentences, max_sequence_length: int
     ) -> [BertInputFeatures]:
 
-        max_sequence_length = max_sequence_length + 2
+        max_sequence_length += 2
 
         features: List[BertEmbeddings.BertInputFeatures] = []
         for (sentence_index, sentence) in enumerate(sentences):
@@ -1192,13 +1186,14 @@ class BertEmbeddings(TokenEmbeddings):
         # first, find longest sentence in batch
         longest_sentence_in_batch: int = len(
             max(
-                [
+                (
                     self.tokenizer.tokenize(sentence.to_tokenized_string())
                     for sentence in sentences
-                ],
+                ),
                 key=len,
             )
         )
+
 
         # prepare id maps for BERT model
         features = self._convert_sentences_to_features(
@@ -1318,9 +1313,9 @@ class DocumentMeanEmbeddings(DocumentEmbeddings):
             self.embeddings.embed(sentences)
 
             for sentence in sentences:
-                word_embeddings = []
-                for token in sentence.tokens:
-                    word_embeddings.append(token.get_embedding().unsqueeze(0))
+                word_embeddings = [
+                    token.get_embedding().unsqueeze(0) for token in sentence.tokens
+                ]
 
                 word_embeddings = torch.cat(word_embeddings, dim=0).to(flair.device)
 
@@ -1435,13 +1430,16 @@ class DocumentLSTMEmbeddings(DocumentEmbeddings):
 
             lengths.append(len(sentence.tokens))
 
-            word_embeddings = []
+            word_embeddings = [
+                token.get_embedding().unsqueeze(0)
+                for token, token_idx in zip(
+                    sentence.tokens, range(len(sentence.tokens))
+                )
+            ]
 
-            for token, token_idx in zip(sentence.tokens, range(len(sentence.tokens))):
-                word_embeddings.append(token.get_embedding().unsqueeze(0))
 
             # PADDING: pad shorter sentences out
-            for add in range(longest_token_sequence_in_batch - len(sentence.tokens)):
+            for _ in range(longest_token_sequence_in_batch - len(sentence.tokens)):
                 word_embeddings.append(
                     torch.zeros(
                         self.length_of_all_token_embeddings, dtype=torch.float
@@ -1524,8 +1522,6 @@ class ELMoTransformerEmbeddings(TokenEmbeddings):
                 "To use ELMoTransformerEmbeddings, please first install a recent version from https://github.com/allenai/allennlp"
             )
             log.warning("-" * 100)
-            pass
-
         self.name = "elmo-transformer"
         self.static_embeddings = True
         self.lm_embedder = BidirectionalLanguageModelTokenEmbedder(

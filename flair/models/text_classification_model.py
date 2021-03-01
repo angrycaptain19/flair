@@ -72,7 +72,7 @@ class TextClassifier(flair.nn.Model):
             n_classes = len(self.label_dictionary)
             weight_list = [1. for i in range(n_classes)]
             for i, tag in enumerate(self.label_dictionary.get_items()):
-                if tag in loss_weights.keys():
+                if tag in loss_weights:
                     weight_list[i] = loss_weights[tag]
             self.loss_weights = torch.FloatTensor(weight_list).to(flair.device)
         else:
@@ -103,12 +103,10 @@ class TextClassifier(flair.nn.Model):
         ]
         text_embedding_tensor = torch.cat(text_embedding_list, 0).to(flair.device)
 
-        label_scores = self.decoder(text_embedding_tensor)
-
-        return label_scores
+        return self.decoder(text_embedding_tensor)
 
     def _get_state_dict(self):
-        model_state = {
+        return {
             "state_dict": self.state_dict(),
             "document_embeddings": self.document_embeddings,
             "label_dictionary": self.label_dictionary,
@@ -117,7 +115,6 @@ class TextClassifier(flair.nn.Model):
             "beta": self.beta,
             "weight_dict": self.weight_dict,
         }
-        return model_state
 
     @staticmethod
     def _init_model_with_state_dict(state):
@@ -184,7 +181,7 @@ class TextClassifier(flair.nn.Model):
         you wish to not only predict, but also keep the generated embeddings in CPU or GPU memory respectively.
         'gpu' to store embeddings in GPU memory.
         """
-        if label_name == None:
+        if label_name is None:
             label_name = self.label_type if self.label_type is not None else 'label'
 
         with torch.no_grad():
@@ -262,15 +259,15 @@ class TextClassifier(flair.nn.Model):
             sentences = SentenceDataset(sentences)
         data_loader = DataLoader(sentences, batch_size=mini_batch_size, num_workers=num_workers)
 
-        # use scikit-learn to evaluate
-        y_true = []
-        y_pred = []
-
         with torch.no_grad():
             eval_loss = 0
 
             lines: List[str] = []
             batch_count: int = 0
+            # use scikit-learn to evaluate
+            y_true = []
+            y_pred = []
+
             for batch in data_loader:
 
                 batch_count += 1
@@ -335,9 +332,11 @@ class TextClassifier(flair.nn.Model):
                     outfile.write("".join(lines))
 
             # make "classification report"
-            target_names = []
-            for i in range(len(self.label_dictionary)):
-                target_names.append(self.label_dictionary.get_item_for_index(i))
+            target_names = [
+                self.label_dictionary.get_item_for_index(i)
+                for i in range(len(self.label_dictionary))
+            ]
+
             classification_report = metrics.classification_report(y_true, y_pred, digits=4,
                                                                   target_names=target_names, zero_division=0)
 
@@ -438,9 +437,10 @@ class TextClassifier(flair.nn.Model):
 
     def _labels_to_one_hot(self, sentences: List[Sentence]):
 
-        label_list = []
-        for sentence in sentences:
-            label_list.append([label.value for label in sentence.get_labels(self.label_type)])
+        label_list = [
+            [label.value for label in sentence.get_labels(self.label_type)]
+            for sentence in sentences
+        ]
 
         one_hot = convert_labels_to_one_hot(label_list, self.label_dictionary)
         one_hot = [torch.FloatTensor(l).unsqueeze(0) for l in one_hot]
@@ -459,9 +459,7 @@ class TextClassifier(flair.nn.Model):
             for sentence in sentences
         ]
 
-        vec = torch.cat(indices, 0).to(flair.device)
-
-        return vec
+        return torch.cat(indices, 0).to(flair.device)
 
     @staticmethod
     def _fetch_model(model_name) -> str:
@@ -655,13 +653,15 @@ class TARSClassifier(TextClassifier):
 
         # the higher the similarity, the greater the chance that a label is
         # sampled as negative example
-        negative_label_probabilities = {}
-        for row_index, label in enumerate(all_labels):
-            negative_label_probabilities[label] = {}
-            for column_index, other_label in enumerate(all_labels):
-                if label != other_label:
-                    negative_label_probabilities[label][other_label] = \
-                        similarity_matrix[row_index][column_index]
+        negative_label_probabilities = {
+            label: {
+                other_label: similarity_matrix[row_index][column_index]
+                for column_index, other_label in enumerate(all_labels)
+                if label != other_label
+            }
+            for row_index, label in enumerate(all_labels)
+        }
+
         self.label_nearest_map = negative_label_probabilities
 
     def train(self, mode=True):
@@ -686,16 +686,15 @@ class TARSClassifier(TextClassifier):
             for plausible_label in self.label_nearest_map[label]:
                 if plausible_label in already_sampled_negative_labels:
                     continue
-                else:
-                    plausible_labels.append(plausible_label)
-                    plausible_label_probabilities.append(self.label_nearest_map[label][plausible_label])
+                plausible_labels.append(plausible_label)
+                plausible_label_probabilities.append(self.label_nearest_map[label][plausible_label])
 
             # make sure the probabilities always sum up to 1
             plausible_label_probabilities = np.array(plausible_label_probabilities, dtype='float64')
             plausible_label_probabilities += 1e-08
             plausible_label_probabilities /= np.sum(plausible_label_probabilities)
 
-            if len(plausible_labels) > 0:
+            if plausible_labels:
                 num_samples = min(self.num_negative_labels_to_sample, len(plausible_labels))
                 sampled_negative_labels = np.random.choice(plausible_labels,
                                                            num_samples,
@@ -737,7 +736,7 @@ class TARSClassifier(TextClassifier):
             else:
                 positive_labels = {label.value for label in sentence.get_labels()}
                 for label in all_labels:
-                    tars_label = None if len(positive_labels) == 0 else label in positive_labels
+                    tars_label = None if not positive_labels else label in positive_labels
                     label_text_pairs_for_sentence.append( \
                         self._get_tars_formatted_sentence(label, original_text, tars_label))
             label_text_pairs.extend(label_text_pairs_for_sentence)

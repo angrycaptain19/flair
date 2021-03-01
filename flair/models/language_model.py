@@ -299,14 +299,9 @@ class LanguageModel(nn.Module):
 
             if len(prefix) > 1:
 
-                char_tensors = []
-                for character in prefix[:-1]:
-                    char_tensors.append(
-                        torch.tensor(self.dictionary.get_idx_for_item(character))
+                char_tensors = [torch.tensor(self.dictionary.get_idx_for_item(character))
                         .unsqueeze(0)
-                        .unsqueeze(0)
-                    )
-
+                        .unsqueeze(0) for character in prefix[:-1]]
                 input = torch.cat(char_tensors).to(flair.device)
 
                 prediction, _, hidden = self.forward(input, hidden)
@@ -319,7 +314,7 @@ class LanguageModel(nn.Module):
 
             log_prob = 0.0
 
-            for i in range(number_of_characters):
+            for _ in range(number_of_characters):
 
                 input = input.to(flair.device)
 
@@ -353,9 +348,10 @@ class LanguageModel(nn.Module):
                 word = idx2item[word_idx].decode("UTF-8")
                 characters.append(word)
 
-                if break_on_suffix is not None:
-                    if "".join(characters).endswith(break_on_suffix):
-                        break
+                if break_on_suffix is not None and "".join(characters).endswith(
+                    break_on_suffix
+                ):
+                    break
 
             text = prefix + "".join(characters)
 
@@ -407,10 +403,7 @@ class LanguageModel(nn.Module):
             if isinstance(child_module, torch.nn.RNNBase) and not hasattr(child_module, "_flat_weights_names"):
                 _flat_weights_names = []
 
-                if child_module.__dict__["bidirectional"]:
-                    num_direction = 2
-                else:
-                    num_direction = 1
+                num_direction = 2 if child_module.__dict__["bidirectional"] else 1
                 for layer in range(child_module.__dict__["num_layers"]):
                     for direction in range(num_direction):
                         suffix = "_reverse" if direction == 1 else ""

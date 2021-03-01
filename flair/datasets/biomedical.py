@@ -141,7 +141,6 @@ def filter_and_map_entities(
                 new_entities.append(new_entity)
             else:
                 logging.debug(f"Skip entity type {entity.type}")
-                pass
         mapped_entities_per_document[id] = new_entities
 
     return InternalBioNerDataset(
@@ -188,7 +187,10 @@ def filter_nested_entities(dataset: InternalBioNerDataset) -> None:
 
         dataset.entities_per_document[document_id] = independent_set
 
-    num_entities_after = sum([len(x) for x in dataset.entities_per_document.values()])
+    num_entities_after = sum(
+        len(x) for x in dataset.entities_per_document.values()
+    )
+
     if num_entities_before != num_entities_after:
         removed = num_entities_before - num_entities_after
         warn(
@@ -499,9 +501,7 @@ class HunerDataset(ColumnCorpus, ABC):
 
         self.sentence_splitter = self.get_corpus_sentence_splitter()
         if not self.sentence_splitter:
-            self.sentence_splitter = (
-                sentence_splitter if sentence_splitter else SciSpacySentenceSplitter()
-            )
+            self.sentence_splitter = sentence_splitter or SciSpacySentenceSplitter()
         else:
             if sentence_splitter:
                 warn(
@@ -662,7 +662,7 @@ class BIO_INFER(ColumnCorpus):
                     start_token = entity_tokens[0]
                     last_entity_token = entity_tokens[0]
                     for entity_token in entity_tokens[1:]:
-                        if not (entity_token[0] - 1) == last_entity_token[0]:
+                        if entity_token[0] - 1 != last_entity_token[0]:
                             entities_per_document[sentence_id].append(
                                 Entity(
                                     char_span=(start_token[1], last_entity_token[2]),
@@ -811,7 +811,7 @@ class HunerJNLPBA(object):
             for line in file_reader:
                 line = line.strip()
                 if line[:3] == "###":
-                    if not (document_id is None and document_text is None):
+                    if document_id is not None or document_text is not None:
                         documents[document_id] = document_text
                         entities_per_document[document_id] = entities
 
@@ -859,7 +859,7 @@ class HunerJNLPBA(object):
                         )
 
             # Last document in file
-            if not (document_id is None and document_text is None):
+            if document_id is not None or document_text is not None:
                 documents[document_id] = document_text
                 entities_per_document[document_id] = entities
 
@@ -1347,48 +1347,46 @@ class KaewphanCorpusHelper:
 
     @staticmethod
     def prepare_and_save_dataset(nersuite_folder: Path, output_file: Path):
-        writer = open(str(output_file), "w", encoding="utf8")
-        out_newline = False
+        with open(str(output_file), "w", encoding="utf8") as writer:
+            out_newline = False
 
-        for file in os.listdir(str(nersuite_folder)):
-            if not file.endswith(".nersuite"):
-                continue
-
-            annotations = []
-            with open(os.path.join(str(nersuite_folder), file), "r", encoding="utf8") as reader:
-                for line in reader.readlines():
-                    columns = line.split("\t")
-                    annotations.append(columns[:4])
-
-            num_annotations = len(annotations)
-            for i, annotation in enumerate(annotations):
-                if len(annotation) == 1:
-                    assert annotation[0] == "\n"
-                    if not out_newline:
-                        writer.write("\n")
-                    out_newline = True
+            for file in os.listdir(str(nersuite_folder)):
+                if not file.endswith(".nersuite"):
                     continue
 
-                has_whitespace = "+"
+                annotations = []
+                with open(os.path.join(str(nersuite_folder), file), "r", encoding="utf8") as reader:
+                    for line in reader.readlines():
+                        columns = line.split("\t")
+                        annotations.append(columns[:4])
 
-                next_annotation = (
-                    annotations[i + 1]
-                    if (i + 1) < num_annotations and len(annotations[i + 1]) > 1
-                    else None
-                )
-                if next_annotation and next_annotation[1] == annotation[2]:
-                    has_whitespace = "-"
+                num_annotations = len(annotations)
+                for i, annotation in enumerate(annotations):
+                    if len(annotation) == 1:
+                        assert annotation[0] == "\n"
+                        if not out_newline:
+                            writer.write("\n")
+                        out_newline = True
+                        continue
 
-                writer.write(
-                    " ".join([annotation[3], annotation[0], has_whitespace]) + "\n"
-                )
-                out_newline = False
+                    has_whitespace = "+"
 
-            if not out_newline:
-                writer.write("\n")
-                out_newline = True
+                    next_annotation = (
+                        annotations[i + 1]
+                        if (i + 1) < num_annotations and len(annotations[i + 1]) > 1
+                        else None
+                    )
+                    if next_annotation and next_annotation[1] == annotation[2]:
+                        has_whitespace = "-"
 
-        writer.close()
+                    writer.write(
+                        " ".join([annotation[3], annotation[0], has_whitespace]) + "\n"
+                    )
+                    out_newline = False
+
+                if not out_newline:
+                    writer.write("\n")
+                    out_newline = True
 
     @staticmethod
     def download_gellus_dataset(data_folder: Path):
@@ -1685,12 +1683,12 @@ class LOCTEXT(ColumnCorpus):
 
         for file in os.listdir(str(loctext_json_folder)):
             document_id = file.strip(".json")
-            entities = []
-
             with open(os.path.join(str(loctext_json_folder), file), "r", encoding="utf8") as f_in:
                 data = json.load(f_in)
                 document_text = data["text"].strip()
                 document_text = document_text.replace("\n", " ")
+
+                entities = []
 
                 if "denotations" in data.keys():
                     for ann in data["denotations"]:
@@ -1698,7 +1696,7 @@ class LOCTEXT(ColumnCorpus):
                         end = int(ann["span"]["end"])
 
                         original_entity_type = ann["obj"].split(":")[0]
-                        if not original_entity_type in entity_type_mapping:
+                        if original_entity_type not in entity_type_mapping:
                             continue
 
                         entity_type = entity_type_mapping[original_entity_type]
@@ -2472,18 +2470,15 @@ class NCBI_DISEASE(ColumnCorpus):
 
     @staticmethod
     def patch_training_file(orig_train_file: Path, patched_file: Path):
-        patch_lines = {
-            3249: '10923035\t711\t761\tgeneralized epilepsy and febrile seizures " plus "\tSpecificDisease\tD004829+D003294\n'
-        }
         with open(str(orig_train_file), "r", encoding="utf8") as input:
             with open(str(patched_file), "w", encoding="utf8") as output:
-                line_no = 1
-
-                for line in input:
+                patch_lines = {
+                    3249: '10923035\t711\t761\tgeneralized epilepsy and febrile seizures " plus "\tSpecificDisease\tD004829+D003294\n'
+                }
+                for line_no, line in enumerate(input, start=1):
                     output.write(
                         patch_lines[line_no] if line_no in patch_lines else line
                     )
-                    line_no += 1
 
     @staticmethod
     def parse_input_file(input_file: Path):
@@ -2633,7 +2628,7 @@ class ScaiCorpus(ColumnCorpus):
                             Entity((entity_start, len(document_text)), entity_type)
                         )
 
-                    if not (document_id is None and document_text is None):
+                    if document_id is not None or document_text is not None:
                         documents[document_id] = document_text
                         entities_per_document[document_id] = entities
 
@@ -2718,9 +2713,7 @@ class SCAI_DISEASE(ScaiCorpus):
         os.makedirs(str(original_directory), exist_ok=True)
 
         url = "https://www.scai.fraunhofer.de/content/dam/scai/de/downloads/bioinformatik/Disease-ae-corpus.iob"
-        data_path = cached_path(url, original_directory)
-
-        return data_path
+        return cached_path(url, original_directory)
 
 
 class HUNER_CHEMICAL_SCAI(HunerDataset):
@@ -3132,8 +3125,8 @@ class GPRO(ColumnCorpus):
                 start, end = int(columns[2]), int(columns[3])
 
                 if columns[1] == "A":
-                    start = start + document_title_length[document_id]
-                    end = end + document_title_length[document_id]
+                    start += document_title_length[document_id]
+                    end += document_title_length[document_id]
 
                 entities_per_document[document_id].append(
                     Entity((start, end), GENE_TAG)
@@ -3977,8 +3970,8 @@ class CEMP(ColumnCorpus):
                 start, end = int(columns[2]), int(columns[3])
 
                 if columns[1] == "T":
-                    start = start + document_abstract_length[document_id]
-                    end = end + document_abstract_length[document_id]
+                    start += document_abstract_length[document_id]
+                    end += document_abstract_length[document_id]
 
                 entities_per_document[document_id].append(
                     Entity((start, end), columns[5].strip())
@@ -5286,9 +5279,7 @@ class AZDZ(ColumnCorpus):
     @classmethod
     def download_corpus(cls, data_dir: Path) -> Path:
         url = "http://diego.asu.edu/downloads/AZDC_6-26-2009.txt"
-        data_path = cached_path(url, data_dir)
-
-        return data_path
+        return cached_path(url, data_dir)
 
     @staticmethod
     def parse_corpus(input_file: Path) -> InternalBioNerDataset:

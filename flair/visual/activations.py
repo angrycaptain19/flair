@@ -65,11 +65,7 @@ class Highlighter(object):
 
         ix = numpy.random.choice(activations.shape[1], size=n)
 
-        rendered = ""
-
-        for i in ix:
-
-            rendered += self.highlight(activations[:, i], text)
+        rendered = "".join(self.highlight(activations[:, i], text) for i in ix)
 
         with open(file_, "w") as f:
             f.write(rendered)

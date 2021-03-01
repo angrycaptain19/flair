@@ -60,7 +60,7 @@ class TransformerDocumentEmbeddings(DocumentEmbeddings):
 
         # load tokenizer and transformer model
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(model, **kwargs)
-        if not 'config' in kwargs:
+        if 'config' not in kwargs:
             config = AutoConfig.from_pretrained(model, output_hidden_states=True, **kwargs)
             self.model = AutoModel.from_pretrained(model, config=config, **kwargs)
         else:
@@ -221,7 +221,7 @@ class TransformerDocumentEmbeddings(DocumentEmbeddings):
             loaded_config = config_class.from_dict(d["config_state_dict"])
 
             # constructor arguments
-            layers = ','.join([str(idx) for idx in self.__dict__['layer_indexes']])
+            layers = ','.join(str(idx) for idx in self.__dict__['layer_indexes'])
 
             # re-initialize transformer word embeddings with constructor arguments
             embedding = TransformerDocumentEmbeddings(
@@ -306,9 +306,9 @@ class DocumentPoolEmbeddings(DocumentEmbeddings):
         self.embeddings.embed(sentences)
 
         for sentence in sentences:
-            word_embeddings = []
-            for token in sentence.tokens:
-                word_embeddings.append(token.get_embedding().unsqueeze(0))
+            word_embeddings = [
+                token.get_embedding().unsqueeze(0) for token in sentence.tokens
+            ]
 
             word_embeddings = torch.cat(word_embeddings, dim=0).to(flair.device)
 
@@ -418,7 +418,7 @@ class DocumentRNNEmbeddings(DocumentEmbeddings):
 
         self.length_of_all_token_embeddings: int = self.embeddings.embedding_length
 
-        self.static_embeddings = False if fine_tune else True
+        self.static_embeddings = not fine_tune
 
         self.__embedding_length: int = hidden_size
         if self.bidirectional:
@@ -565,10 +565,7 @@ class DocumentRNNEmbeddings(DocumentEmbeddings):
             if isinstance(child_module, torch.nn.RNNBase) and not hasattr(child_module, "_flat_weights_names"):
                 _flat_weights_names = []
 
-                if child_module.__dict__["bidirectional"]:
-                    num_direction = 2
-                else:
-                    num_direction = 1
+                num_direction = 2 if child_module.__dict__["bidirectional"] else 1
                 for layer in range(child_module.__dict__["num_layers"]):
                     for direction in range(num_direction):
                         suffix = "_reverse" if direction == 1 else ""
@@ -656,8 +653,6 @@ class SentenceTransformerDocumentEmbeddings(DocumentEmbeddings):
                 'To use Sentence Transformers, please first install with "pip install sentence-transformers"'
             )
             log.warning("-" * 100)
-            pass
-
         self.model = SentenceTransformer(model)
         self.name = 'sentence-transformers-' + str(model)
         self.batch_size = batch_size

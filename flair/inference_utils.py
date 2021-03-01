@@ -68,7 +68,7 @@ class WordEmbeddingsStore:
         :param verbose: If `True` print information on standard output
         """
         # some non-used parameter to allow print
-        self._modules = dict()
+        self._modules = {}
         self.items = ""
 
         # get db filename from embedding name
@@ -108,8 +108,7 @@ class WordEmbeddingsStore:
         """
         cache_dir = Path(flair.cache_root)
         embedding_filename = re.findall("/(embeddings/.*)", embedding.name)[0]
-        store_path = cache_dir / (embedding_filename + "." + backend)
-        return store_path
+        return cache_dir / (embedding_filename + "." + backend)
 
     @staticmethod
     def _word_embeddings(model):

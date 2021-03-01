@@ -90,11 +90,7 @@ class TextDataset(Dataset):
         tokens = 0
         for line in lines:
 
-            if split_on_char:
-                chars = list(line)
-            else:
-                chars = line.split()
-
+            chars = list(line) if split_on_char else line.split()
             tokens += len(chars)
 
             # Add chars to the dictionary
@@ -110,11 +106,7 @@ class TextDataset(Dataset):
                 if random_case_flip:
                     line = self.random_casechange(line)
 
-                if split_on_char:
-                    chars = list(line)
-                else:
-                    chars = line.split()
-
+                chars = list(line) if split_on_char else line.split()
                 for char in chars:
                     if token >= tokens:
                         break
@@ -127,11 +119,7 @@ class TextDataset(Dataset):
                 if random_case_flip:
                     line = self.random_casechange(line)
 
-                if split_on_char:
-                    chars = list(line)
-                else:
-                    chars = line.split()
-
+                chars = list(line) if split_on_char else line.split()
                 for char in chars:
                     if token >= tokens:
                         break
