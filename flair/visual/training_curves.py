@@ -62,19 +62,16 @@ class Plotter(object):
             # then get all relevant values from the tsv
             for row in tsvin:
 
-                if TRAIN_SCORE is not None:
-                    if row[TRAIN_SCORE] != "_":
-                        training_curves["train"]["score"].append(
-                            float(row[TRAIN_SCORE])
-                        )
+                if TRAIN_SCORE is not None and row[TRAIN_SCORE] != "_":
+                    training_curves["train"]["score"].append(
+                        float(row[TRAIN_SCORE])
+                    )
 
-                if DEV_SCORE is not None:
-                    if row[DEV_SCORE] != "_":
-                        training_curves["dev"]["score"].append(float(row[DEV_SCORE]))
+                if DEV_SCORE is not None and row[DEV_SCORE] != "_":
+                    training_curves["dev"]["score"].append(float(row[DEV_SCORE]))
 
-                if TEST_SCORE is not None:
-                    if row[TEST_SCORE] != "_":
-                        training_curves["test"]["score"].append(float(row[TEST_SCORE]))
+                if TEST_SCORE is not None and row[TEST_SCORE] != "_":
+                    training_curves["test"]["score"].append(float(row[TEST_SCORE]))
 
         return training_curves
 

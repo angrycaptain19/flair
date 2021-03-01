@@ -119,9 +119,7 @@ class PairwiseBCELoss(SimilarityLoss):
             # TODO: this assumes eye matrix
             weight_matrix = n * (targets / 2.0 + neg_targets / (2.0 * (n - 1)))
             bce_loss *= weight_matrix
-        loss = bce_loss.mean()
-
-        return loss
+        return bce_loss.mean()
 
 
 class RankingLoss(SimilarityLoss):
@@ -146,13 +144,11 @@ class RankingLoss(SimilarityLoss):
         )
         neg_targets_01_sum = torch.sum(neg_targets, dim=1)
         neg_targets_10_sum = torch.sum(neg_targets, dim=0)
-        loss = self.direction_weights[0] * torch.mean(
+        return self.direction_weights[0] * torch.mean(
             torch.sum(ranking_loss_matrix_01 / neg_targets_01_sum, dim=1)
         ) + self.direction_weights[1] * torch.mean(
             torch.sum(ranking_loss_matrix_10 / neg_targets_10_sum, dim=0)
         )
-
-        return loss
 
 
 # == similarity learner ==
@@ -344,15 +340,15 @@ class SimilarityLearner(flair.nn.Model):
         ]
         epoch_results_str = "\t".join(epoch_results)
         detailed_results = ", ".join(
-            [f"{h}={v}" for h, v in zip(results_header, epoch_results)]
+            f"{h}={v}" for h, v in zip(results_header, epoch_results)
         )
 
+
         validated_measure = sum(
-            [
-                recall_at[r] * w
-                for r, w in zip(self.recall_at_points, self.recall_at_points_weights)
-            ]
+            recall_at[r] * w
+            for r, w in zip(self.recall_at_points, self.recall_at_points_weights)
         )
+
 
         return (
             Result(
@@ -365,7 +361,7 @@ class SimilarityLearner(flair.nn.Model):
         )
 
     def _get_state_dict(self):
-        model_state = {
+        return {
             "state_dict": self.state_dict(),
             "input_modality_0_embedding": self.source_embeddings,
             "input_modality_1_embedding": self.target_embeddings,
@@ -377,7 +373,6 @@ class SimilarityLearner(flair.nn.Model):
             "recall_at_points": self.recall_at_points,
             "recall_at_points_weights": self.recall_at_points_weights,
         }
-        return model_state
 
     @staticmethod
     def _init_model_with_state_dict(state):

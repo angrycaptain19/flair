@@ -112,7 +112,7 @@ def simple_tokenizer(text: str) -> List[Token]:
     word = ""
     index = -1
     for index, char in enumerate(text):
-        if char == " " or char == "-":
+        if char in [" ", "-"]:
             if len(word) > 0:
                 start_position = index - len(word)
                 tokens.append(
@@ -239,9 +239,10 @@ def assert_conll_writer_output(
 ):
     outfile_path = tempfile.mkstemp()[1]
     try:
-        sentence_splitter = (
-            sentence_splitter if sentence_splitter else NoSentenceSplitter(tokenizer=SpaceTokenizer())
+        sentence_splitter = sentence_splitter or NoSentenceSplitter(
+            tokenizer=SpaceTokenizer()
         )
+
 
         writer = CoNLLWriter(sentence_splitter=sentence_splitter)
         writer.write_to_conll(dataset, Path(outfile_path))
@@ -305,9 +306,7 @@ def test_sanity_not_starting_with_minus(CorpusType: Type[ColumnCorpus]):
         entities = sentence.get_spans("ner")
         for entity in entities:
             if str(entity.tokens[0].text).startswith("-"):
-                entities_starting_with_minus.append(
-                    " ".join([t.text for t in entity.tokens])
-                )
+                entities_starting_with_minus.append(" ".join(t.text for t in entity.tokens))
 
     assert len(entities_starting_with_minus) == 0, "|".join(
         entities_starting_with_minus
@@ -390,10 +389,9 @@ def test_sanity_no_misaligned_entities(CorpusType: Type[HunerDataset]):
 
     corpus = CorpusType()
     internal = corpus.to_internal(data_folder)
-    for doc_id, doc_text in internal.documents.items():
-        misaligned_starts = []
-        misaligned_ends = []
+    misaligned_ends = []
 
+    for doc_id, doc_text in internal.documents.items():
         token_starts = set()
         token_ends = set()
         for token, token_start in zip(*tokenizer.tokenize(doc_text)):
@@ -404,9 +402,9 @@ def test_sanity_no_misaligned_entities(CorpusType: Type[HunerDataset]):
         entity_starts = [i.char_span.start for i in entities]
         entity_ends = [i.char_span.stop for i in entities]
 
-        for start in entity_starts:
-            if start not in entity_starts:
-                misaligned_starts.append(start)
+        misaligned_starts = [
+            start for start in entity_starts if start not in entity_starts
+        ]
 
         for end in entity_ends:
             if end not in entity_ends:

@@ -303,7 +303,7 @@ class SciSpacyTokenizer(Tokenizer):
             """
             prefix_punct = char_classes.PUNCT.replace("|", " ")
 
-            prefixes = (
+            return (
                     ["§", "%", "=", r"\+"]
                     + char_classes.split_chars(prefix_punct)
                     + char_classes.LIST_ELLIPSES
@@ -311,7 +311,6 @@ class SciSpacyTokenizer(Tokenizer):
                     + char_classes.LIST_CURRENCY
                     + char_classes.LIST_ICONS
             )
-            return prefixes
 
         infixes = (
                 char_classes.LIST_ELLIPSES
@@ -486,7 +485,7 @@ class SpacySentenceSplitter(SentenceSplitter):
     def split(self, text: str) -> List[Sentence]:
         document = self.model(text)
 
-        sentences = [
+        return [
             Sentence(
                 text=str(spacy_sent),
                 use_tokenizer=self._tokenizer,
@@ -495,8 +494,6 @@ class SpacySentenceSplitter(SentenceSplitter):
             for spacy_sent in document.sents
             if len(str(spacy_sent)) > 0
         ]
-
-        return sentences
 
     @property
     def tokenizer(self) -> Tokenizer:

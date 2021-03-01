@@ -38,9 +38,7 @@ class TextRegressor(flair.models.TextClassifier):
             for sentence in sentences
         ]
 
-        vec = torch.cat(indices, 0).to(flair.device)
-
-        return vec
+        return torch.cat(indices, 0).to(flair.device)
 
     def predict(
             self,
@@ -50,7 +48,7 @@ class TextRegressor(flair.models.TextClassifier):
             embedding_storage_mode="none",
     ) -> List[Sentence]:
 
-        if label_name == None:
+        if label_name is None:
             label_name = self.label_type if self.label_type is not None else 'label'
 
         with torch.no_grad():
@@ -177,12 +175,11 @@ class TextRegressor(flair.models.TextClassifier):
             return result, eval_loss
 
     def _get_state_dict(self):
-        model_state = {
+        return {
             "state_dict": self.state_dict(),
             "document_embeddings": self.document_embeddings,
             "label_name": self.label_type,
         }
-        return model_state
 
     @staticmethod
     def _init_model_with_state_dict(state):

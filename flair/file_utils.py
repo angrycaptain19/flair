@@ -311,10 +311,7 @@ class Tqdm:
         but it is not great for log files.  You might want to set this if you are primarily going
         to be looking at output through log files, not the terminal.
         """
-        if use_slower_interval:
-            Tqdm.default_mininterval = 10.0
-        else:
-            Tqdm.default_mininterval = 0.1
+        Tqdm.default_mininterval = 10.0 if use_slower_interval else 0.1
 
     @staticmethod
     def tqdm(*args, **kwargs):

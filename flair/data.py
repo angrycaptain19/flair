@@ -78,10 +78,7 @@ class Dictionary:
         return list(results)
 
     def get_items(self) -> List[str]:
-        items = []
-        for item in self.idx2item:
-            items.append(item.decode("UTF-8"))
-        return items
+        return [item.decode("UTF-8") for item in self.idx2item]
 
     def __len__(self) -> int:
         return len(self.idx2item)
@@ -113,15 +110,15 @@ class Dictionary:
     def load(cls, name: str):
         from flair.file_utils import cached_path
         hu_path: str = "https://flair.informatik.hu-berlin.de/resources/characters"
-        if name == "chars" or name == "common-chars":
+        if name in ["chars", "common-chars"]:
             char_dict = cached_path(f"{hu_path}/common_characters", cache_dir="datasets")
             return Dictionary.load_from_file(char_dict)
 
-        if name == "chars-large" or name == "common-chars-large":
+        if name in ["chars-large", "common-chars-large"]:
             char_dict = cached_path(f"{hu_path}/common_characters_large", cache_dir="datasets")
             return Dictionary.load_from_file(char_dict)
 
-        if name == "chars-xl" or name == "common-chars-xl":
+        if name in ["chars-xl", "common-chars-xl"]:
             char_dict = cached_path(f"{hu_path}/common_characters_xl", cache_dir="datasets")
             return Dictionary.load_from_file(char_dict)
 
@@ -162,10 +159,7 @@ class Label:
 
     @score.setter
     def score(self, score):
-        if 0.0 <= score <= 1.0:
-            self._score = score
-        else:
-            self._score = 1.0
+        self._score = score if 0.0 <= score <= 1.0 else 1.0
 
     def to_dict(self):
         return {"value": self.value, "confidence": self.score}
@@ -398,16 +392,16 @@ class Span(DataPoint):
 
         if tokens:
             self.start_pos = tokens[0].start_position
-            self.end_pos = tokens[len(tokens) - 1].end_position
+            self.end_pos = tokens[-1].end_position
 
     @property
     def text(self) -> str:
-        return " ".join([t.text for t in self.tokens])
+        return " ".join(t.text for t in self.tokens)
 
     def to_original_text(self) -> str:
         pos = self.tokens[0].start_pos
         if pos is None:
-            return " ".join([t.text for t in self.tokens])
+            return " ".join(t.text for t in self.tokens)
         str = ""
         for t in self.tokens:
             while t.start_pos != pos:
@@ -436,15 +430,15 @@ class Span(DataPoint):
         }
 
     def __str__(self) -> str:
-        ids = ",".join([str(t.idx) for t in self.tokens])
-        label_string = " ".join([str(label) for label in self.labels])
+        ids = ",".join(str(t.idx) for t in self.tokens)
+        label_string = " ".join(str(label) for label in self.labels)
         labels = f'   [− Labels: {label_string}]' if self.labels is not None else ""
         return (
             'Span [{}]: "{}"{}'.format(ids, self.text, labels)
         )
 
     def __repr__(self) -> str:
-        ids = ",".join([str(t.idx) for t in self.tokens])
+        ids = ",".join(str(t.idx) for t in self.tokens)
         return (
             '<{}-span ({}): "{}">'.format(self.tag, ids, self.text)
             if self.tag is not None
@@ -621,10 +615,7 @@ class Sentence(DataPoint):
             token.idx = len(self.tokens)
 
     def get_label_names(self):
-        label_names = []
-        for label in self.labels:
-            label_names.append(label.value)
-        return label_names
+        return [label.value for label in self.labels]
 
     def _add_spans_internal(self, spans: List[Span], label_type: str, min_score):
 
@@ -639,7 +630,7 @@ class Sentence(DataPoint):
             tag_value = tag.value
 
             # non-set tags are OUT tags
-            if tag_value == "" or tag_value == "O" or tag_value == "_":
+            if tag_value in ["", "O", "_"]:
                 tag_value = "O-"
 
             # anything that is not a BIOES tag is a SINGLE tag
@@ -663,7 +654,7 @@ class Sentence(DataPoint):
             ):
                 starts_new_span = True
 
-            if (starts_new_span or not in_span) and len(current_span) > 0:
+            if ((starts_new_span or not in_span)) and current_span:
                 scores = [t.get_labels(label_type)[0].score for t in current_span]
                 span_score = sum(scores) / len(scores)
                 if span_score > min_score:
@@ -685,7 +676,7 @@ class Sentence(DataPoint):
             # remember previous tag
             previous_tag_value = tag_value
 
-        if len(current_span) > 0:
+        if current_span:
             scores = [t.get_labels(label_type)[0].score for t in current_span]
             span_score = sum(scores) / len(scores)
             if span_score > min_score:
@@ -795,7 +786,7 @@ class Sentence(DataPoint):
     def to_tokenized_string(self) -> str:
 
         if self.tokenized is None:
-            self.tokenized = " ".join([t.text for t in self.tokens])
+            self.tokenized = " ".join(t.text for t in self.tokens)
 
         return self.tokenized
 
@@ -857,7 +848,7 @@ class Sentence(DataPoint):
 
     def to_original_text(self) -> str:
         if len(self.tokens) > 0 and (self.tokens[0].start_pos is None):
-            return " ".join([t.text for t in self.tokens])
+            return " ".join(t.text for t in self.tokens)
         str = ""
         pos = 0
         for t in self.tokens:
@@ -1007,7 +998,7 @@ class Image(DataPoint):
     def __str__(self):
 
         image_repr = self.data.size() if self.data else ""
-        image_url = self.imageURL if self.imageURL else ""
+        image_url = self.imageURL or ""
 
         return f"Image: {image_repr} {image_url}"
 
@@ -1243,14 +1234,8 @@ class Corpus:
         tags_to_count = Corpus._count_token_labels(sentences, tag_type)
         tokens_per_sentence = Corpus._get_tokens_per_sentence(sentences)
 
-        label_size_dict = {}
-        for l, c in classes_to_count.items():
-            label_size_dict[l] = c
-
-        tag_size_dict = {}
-        for l, c in tags_to_count.items():
-            tag_size_dict[l] = c
-
+        label_size_dict = {l: c for l, c in classes_to_count.items()}
+        tag_size_dict = {l: c for l, c in tags_to_count.items()}
         return {
             "dataset": name,
             "total_number_of_documents": len(sentences),
@@ -1323,9 +1308,8 @@ class Corpus:
                         for label in token.get_labels(label_type):
                             label_dictionary.add_item(label.value)
 
-                if not label_dictionary.multi_label:
-                    if len(labels) > 1:
-                        label_dictionary.multi_label = True
+                if not label_dictionary.multi_label and len(labels) > 1:
+                    label_dictionary.multi_label = True
 
         log.info(label_dictionary.idx2item)
 
@@ -1371,11 +1355,11 @@ class MultiCorpus(Corpus):
             if corpus.test: test_parts.append(corpus.test)
 
         super(MultiCorpus, self).__init__(
-            ConcatDataset(train_parts) if len(train_parts) > 0 else None,
-            ConcatDataset(dev_parts) if len(dev_parts) > 0 else None,
-            ConcatDataset(test_parts) if len(test_parts) > 0 else None,
+            ConcatDataset(train_parts) if train_parts else None,
+            ConcatDataset(dev_parts) if dev_parts else None,
+            ConcatDataset(test_parts) if test_parts else None,
             name=name,
-            **corpusargs,
+            **corpusargs
         )
 
     def __str__(self):
@@ -1383,7 +1367,10 @@ class MultiCorpus(Corpus):
                  f"{len(self.train) if self.train else 0} train + " \
                  f"{len(self.dev) if self.dev else 0} dev + " \
                  f"{len(self.test) if self.test else 0} test sentences\n - "
-        output += "\n - ".join([f'{type(corpus).__name__} {str(corpus)}' for corpus in self.corpora])
+        output += "\n - ".join(
+            f'{type(corpus).__name__} {str(corpus)}' for corpus in self.corpora
+        )
+
         return output
 
 

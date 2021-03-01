@@ -133,7 +133,7 @@ class DistancePredictor(flair.nn.Model):
         return label_scores
 
     def _get_state_dict(self):
-        model_state = {
+        return {
             "state_dict": self.state_dict(),
             "word_embeddings": self.word_embeddings,
             "max_distance": self.max_distance,
@@ -142,7 +142,6 @@ class DistancePredictor(flair.nn.Model):
             "regression": self.regression,
             "regr_loss_step": self.regr_loss_step
         }
-        return model_state
 
     @staticmethod
     def _init_model_with_state_dict(state):
@@ -253,7 +252,7 @@ class DistancePredictor(flair.nn.Model):
 
             lines: List[str] = []
 
-            max_dist_plus_one = max([len(sent) for sent in sentences]) - 1
+            max_dist_plus_one = max(len(sent) for sent in sentences) - 1
 
             num_occurences = [0 for _ in range(max_dist_plus_one)]
 
@@ -480,10 +479,7 @@ class DistancePredictor(flair.nn.Model):
 
     def _predict_label_prob(self, label_scores) -> List[Label]:
         softmax = torch.nn.functional.softmax(label_scores, dim=0)
-        label_probs = []
-        for idx, conf in enumerate(softmax):
-            label_probs.append(Label(idx, conf.item()))
-        return label_probs
+        return [Label(idx, conf.item()) for idx, conf in enumerate(softmax)]
 
     def __str__(self):
         return super(flair.nn.Model, self).__str__().rstrip(')') + \

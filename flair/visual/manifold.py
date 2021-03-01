@@ -74,7 +74,7 @@ class Visualizer(object):
         X = []
 
         for sentence in tqdm.tqdm(sentences):
-            sentence = " ".join([x.text for x in sentence])
+            sentence = " ".join(x.text for x in sentence)
 
             hidden = embeddings.lm.get_representation([sentence], "", "")
             X.append(hidden.squeeze().detach().numpy())
@@ -88,7 +88,7 @@ class Visualizer(object):
         contexts = []
 
         for sentence in sentences:
-            sentence = " ".join([token.text for token in sentence])
+            sentence = " ".join(token.text for token in sentence)
 
             for i, char in enumerate(sentence):
                 context = '<span style="background-color: yellow"><b>{}</b></span>'.format(

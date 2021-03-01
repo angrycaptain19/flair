@@ -94,8 +94,6 @@ class NetworkImageEmbeddings(ImageEmbeddings):
                 'To use convnets pretraned on ImageNet, please first install with "pip install torchvision"'
             )
             log.warning("-" * 100)
-            pass
-
         model_info = {
             "resnet50": (torchvision.models.resnet50, lambda x: list(x)[:-1], 2048),
             "mobilenet_v2": (

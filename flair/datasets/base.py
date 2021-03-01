@@ -175,8 +175,6 @@ class MongoDataset(FlairDataset):
                 'To use MongoDataset, please first install with "pip install pymongo"'
             )
             log.warning("-" * 100)
-            pass
-
         self.in_memory = in_memory
         self.tokenizer = tokenizer
 
@@ -195,11 +193,11 @@ class MongoDataset(FlairDataset):
         self.text = text_field
         self.categories = categories_field if categories_field is not None else []
 
-        start = 0
-
-        kwargs = lambda start: {"filter": query, "skip": start, "limit": 0}
-
         if self.in_memory:
+            start = 0
+
+            kwargs = lambda start: {"filter": query, "skip": start, "limit": 0}
+
             for document in self.__cursor.find(**kwargs(start)):
                 sentence = self._parse_document_to_sentence(
                     document[self.text],
@@ -239,14 +237,12 @@ class MongoDataset(FlairDataset):
     def __getitem__(self, index: int = 0) -> Sentence:
         if self.in_memory:
             return self.sentences[index]
-        else:
-            document = self.__cursor.find_one({"_id": index})
-            sentence = self._parse_document_to_sentence(
+        document = self.__cursor.find_one({"_id": index})
+        return self._parse_document_to_sentence(
                 document[self.text],
                 [document[_] if _ in document else "" for _ in self.categories],
                 self.tokenizer,
             )
-            return sentence
 
 
 def find_train_dev_test_files(data_folder, dev_file, test_file, train_file, autofind_splits=True):
@@ -260,15 +256,15 @@ def find_train_dev_test_files(data_folder, dev_file, test_file, train_file, auto
     if dev_file is not None:
         dev_file = data_folder / dev_file
 
-    suffixes_to_ignore = {".gz", ".swp"}
-
     # automatically identify train / test / dev files
     if train_file is None and autofind_splits:
+        suffixes_to_ignore = {".gz", ".swp"}
+
         for file in data_folder.iterdir():
             file_name = file.name
             if not suffixes_to_ignore.isdisjoint(file.suffixes):
                 continue
-            if "train" in file_name and not "54019" in file_name:
+            if "train" in file_name and "54019" not in file_name:
                 train_file = file
             if "dev" in file_name:
                 dev_file = file

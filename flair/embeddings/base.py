@@ -44,14 +44,13 @@ class Embeddings(torch.nn.Module):
 
         everything_embedded: bool = True
 
-        if self.embedding_type == "word-level":
-            for sentence in sentences:
+        for sentence in sentences:
+            if self.embedding_type == "word-level":
                 for token in sentence.tokens:
                     if self.name not in token._embeddings.keys():
                         everything_embedded = False
                         break
-        else:
-            for sentence in sentences:
+            else:
                 if self.name not in sentence._embeddings.keys():
                     everything_embedded = False
                     break
@@ -139,7 +138,5 @@ class ScalarMix(torch.nn.Module):
         )
         normed_weights = torch.split(normed_weights, split_size_or_sections=1)
 
-        pieces = []
-        for weight, tensor in zip(normed_weights, tensors):
-            pieces.append(weight * tensor)
+        pieces = [weight * tensor for weight, tensor in zip(normed_weights, tensors)]
         return self.gamma * sum(pieces)

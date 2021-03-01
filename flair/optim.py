@@ -123,11 +123,7 @@ class SGDW(Optimizer):
                     else:
                         buf = param_state["momentum_buffer"]
                         buf.mul_(momentum).add_(1 - dampening, d_p)
-                    if nesterov:
-                        d_p = d_p.add(momentum, buf)
-                    else:
-                        d_p = buf
-
+                    d_p = d_p.add(momentum, buf) if nesterov else buf
                 if weight_decay != 0:
                     p.data.add_(-weight_decay, p.data)
 
@@ -173,9 +169,9 @@ class AdamW(Optimizer):
         weight_decay=0,
         amsgrad=False,
     ):
-        if not 0.0 <= lr:
+        if not lr >= 0.0:
             raise ValueError("Invalid learning rate: {}".format(lr))
-        if not 0.0 <= eps:
+        if not eps >= 0.0:
             raise ValueError("Invalid epsilon value: {}".format(eps))
         if not 0.0 <= betas[0] < 1.0:
             raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))

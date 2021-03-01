@@ -157,13 +157,13 @@ class ClassificationDataset(FlairDataset):
         self.memory_mode = memory_mode
         self.tokenizer = tokenizer
 
-        if self.memory_mode == 'full':
-            self.sentences = []
-        if self.memory_mode == 'partial':
-            self.lines = []
         if self.memory_mode == 'disk':
             self.indices = []
 
+        elif self.memory_mode == 'full':
+            self.sentences = []
+        elif self.memory_mode == 'partial':
+            self.lines = []
         self.total_sentence_count: int = 0
         self.truncate_to_max_chars = truncate_to_max_chars
         self.truncate_to_max_tokens = truncate_to_max_tokens
@@ -188,10 +188,7 @@ class ClassificationDataset(FlairDataset):
 
                 # if data point contains black-listed label, do not use
                 if skip_labels:
-                    skip = False
-                    for skip_label in skip_labels:
-                        if "__label__" + skip_label in line:
-                            skip = True
+                    skip = any("__label__" + skip_label in line for skip_label in skip_labels)
                     if skip:
                         line = f.readline()
                         continue
@@ -204,18 +201,17 @@ class ClassificationDataset(FlairDataset):
                         self.sentences.append(sentence)
                         self.total_sentence_count += 1
 
-                if self.memory_mode == 'partial' or self.memory_mode == 'disk':
+                if self.memory_mode in ['partial', 'disk']:
 
                     # first check if valid sentence
                     words = line.split()
                     l_len = 0
                     label = False
                     for i in range(len(words)):
-                        if words[i].startswith(self.label_prefix):
-                            l_len += len(words[i]) + 1
-                            label = True
-                        else:
+                        if not words[i].startswith(self.label_prefix):
                             break
+                        l_len += len(words[i]) + 1
+                        label = True
                     text = line[l_len:].strip()
 
                     # if so, add to indices
@@ -274,8 +270,7 @@ class ClassificationDataset(FlairDataset):
 
     def is_in_memory(self) -> bool:
         if self.memory_mode == 'disk': return False
-        if self.memory_mode == 'partial': return False
-        return True
+        return self.memory_mode != 'partial'
 
     def __len__(self):
         return self.total_sentence_count
@@ -524,25 +519,27 @@ class CSVClassificationDataset(FlairDataset):
     def __getitem__(self, index: int = 0) -> Sentence:
         if self.in_memory:
             return self.sentences[index]
-        else:
-            row = self.raw_data[index]
+        row = self.raw_data[index]
 
-            text = " ".join([row[text_column] for text_column in self.text_columns])
+        text = " ".join(row[text_column] for text_column in self.text_columns)
 
-            if self.max_chars_per_doc > 0:
-                text = text[: self.max_chars_per_doc]
+        if self.max_chars_per_doc > 0:
+            text = text[: self.max_chars_per_doc]
 
-            sentence = Sentence(text, use_tokenizer=self.tokenizer)
-            for column in self.column_name_map:
-                column_value = row[column]
-                if self.column_name_map[column].startswith("label") and column_value:
-                    if column_value != self.no_class_label:
-                        sentence.add_label(self.label_type, column_value)
+        sentence = Sentence(text, use_tokenizer=self.tokenizer)
+        for column in self.column_name_map:
+            column_value = row[column]
+            if (
+                self.column_name_map[column].startswith("label")
+                and column_value
+                and column_value != self.no_class_label
+            ):
+                sentence.add_label(self.label_type, column_value)
 
-            if 0 < self.max_tokens_per_doc < len(sentence):
-                sentence.tokens = sentence.tokens[: self.max_tokens_per_doc]
+        if 0 < self.max_tokens_per_doc < len(sentence):
+            sentence.tokens = sentence.tokens[: self.max_tokens_per_doc]
 
-            return sentence
+        return sentence
 
 
 class AMAZON_REVIEWS(ClassificationCorpus):
@@ -673,10 +670,10 @@ class AMAZON_REVIEWS(ClassificationCorpus):
             os.makedirs(data_folder)
         with open(data_folder / "train.txt", "a") as train_file:
 
-            write_count = 0
             review_5_count = 0
             # download senteval datasets if necessary und unzip
             with gzip.open(Path(flair.cache_root) / "datasets" / 'Amazon_Product_Reviews' / part_name, "rb", ) as f_in:
+                write_count = 0
                 for line in f_in:
                     parsed_json = json.loads(line)
                     if 'reviewText' not in parsed_json:
@@ -737,21 +734,21 @@ class IMDB(ClassificationCorpus):
             base_path = Path(flair.cache_root) / "datasets"
         data_folder = base_path / dataset_name
 
-        # download data if necessary
-        imdb_acl_path = "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
         data_path = Path(flair.cache_root) / "datasets" / dataset_name
         data_file = data_path / "train.txt"
         if not data_file.is_file():
+            # download data if necessary
+            imdb_acl_path = "http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
             cached_path(imdb_acl_path, Path("datasets") / dataset_name)
             import tarfile
 
             with tarfile.open(
-                    Path(flair.cache_root)
-                    / "datasets"
-                    / dataset_name
-                    / "aclImdb_v1.tar.gz",
-                    "r:gz",
-            ) as f_in:
+                            Path(flair.cache_root)
+                            / "datasets"
+                            / dataset_name
+                            / "aclImdb_v1.tar.gz",
+                            "r:gz",
+                    ) as f_in:
                 datasets = ["train", "test"]
                 labels = ["pos", "neg"]
 
@@ -771,8 +768,10 @@ class IMDB(ClassificationCorpus):
                                 if file_name.is_file() and file_name.name.endswith(
                                         ".txt"
                                 ):
-                                    if label == "pos": sentiment_label = 'POSITIVE'
-                                    if label == "neg": sentiment_label = 'NEGATIVE'
+                                    if label == "neg":
+                                        sentiment_label = 'NEGATIVE'
+                                    elif label == "pos":
+                                        sentiment_label = 'POSITIVE'
                                     f_p.write(
                                         f"__label__{sentiment_label} "
                                         + file_name.open("rt", encoding="utf-8").read()
@@ -816,13 +815,13 @@ class NEWSGROUPS(ClassificationCorpus):
             base_path = Path(flair.cache_root) / "datasets"
         data_folder = base_path / dataset_name
 
-        # download data if necessary
-        twenty_newsgroups_path = (
-            "http://qwone.com/~jason/20Newsgroups/20news-bydate.tar.gz"
-        )
         data_path = Path(flair.cache_root) / "datasets" / dataset_name
         data_file = data_path / "20news-bydate-train.txt"
         if not data_file.is_file():
+            # download data if necessary
+            twenty_newsgroups_path = (
+                "http://qwone.com/~jason/20Newsgroups/20news-bydate.tar.gz"
+            )
             cached_path(
                 twenty_newsgroups_path, Path("datasets") / dataset_name / "original"
             )
@@ -1584,7 +1583,7 @@ class GERMEVAL_2018_OFFENSIVE_LANGUAGE(ClassificationCorpus):
                 f"{offlang_path}{original_filename}",
                 Path("datasets") / dataset_name / "original",
             )
-        
+
         task_setting = "coarse_grained"
         if fine_grained_classes:
             task_setting = "fine_grained"
@@ -1601,21 +1600,18 @@ class GERMEVAL_2018_OFFENSIVE_LANGUAGE(ClassificationCorpus):
                     original_filenames, new_filenames
             ):
                 with open(
-                        data_folder / "original" / original_filename,
-                        "rt",
-                        encoding="utf-8",
-                ) as open_fp:
+                                    data_folder / "original" / original_filename,
+                                    "rt",
+                                    encoding="utf-8",
+                            ) as open_fp:
                     with open(
-                            data_folder / task_setting / new_filename, "wt", encoding="utf-8"
-                    ) as write_fp:
+                                            data_folder / task_setting / new_filename, "wt", encoding="utf-8"
+                                    ) as write_fp:
                         for line in open_fp:
                             line = line.rstrip()
                             fields = line.split('\t')
                             tweet = fields[0]
-                            if task_setting == "fine_grained":
-                                old_label = fields[2]
-                            else: 
-                                old_label = fields[1]
+                            old_label = fields[2] if task_setting == "fine_grained" else fields[1]
                             new_label = '__label__' + old_label
                             write_fp.write(f"{new_label} {tweet}\n")
 
